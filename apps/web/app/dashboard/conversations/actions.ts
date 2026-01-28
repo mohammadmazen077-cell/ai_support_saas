@@ -2,9 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { createConversation } from '@/lib/api/conversations';
-import { addMessage } from '@/lib/api/messages';
-import { generateAIResponse } from '@/lib/ai';
+import { createConversation, updateConversationTitle } from '@/lib/api/conversations';
+import { addMessage, getMessages } from '@/lib/api/messages';
+import { generateAIResponse, generateConversationTitle } from '@/lib/ai';
 
 export async function createConversationAction() {
     try {
@@ -24,17 +24,31 @@ export async function addMessageAction(conversationId: string, content: string) 
     try {
         if (!content.trim()) return;
 
-        // 1. Save User Message
+        // 1. Fetch History (need checks if it's the first message)
+        const history = await getMessages(conversationId);
+        const isFirstMessage = history.length === 0;
+
+        // 2. Save User Message
         await addMessage(conversationId, 'user', content);
 
-        // 2. Generate AI Response
-        // In a real app, you'd fetch previous context here
-        const aiResponse = await generateAIResponse([{ role: 'user', content }]);
+        // 3. Auto-Title if first message
+        if (isFirstMessage) {
+            const newTitle = generateConversationTitle(content);
+            await updateConversationTitle(conversationId, newTitle);
+            // Note: we'll revalidate path at the end, which updates the sidebar
+        }
 
-        // 3. Save AI Message
+        // 4. Generate AI Response
+        // Construct full history for context
+        const fullContext = [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content }];
+
+        const aiResponse = await generateAIResponse(fullContext);
+
+        // 5. Save AI Message
         await addMessage(conversationId, 'assistant', aiResponse.content, aiResponse.metadata);
 
         revalidatePath(`/dashboard/conversations/${conversationId}`);
+        revalidatePath('/dashboard/conversations'); // Update list title
     } catch (error) {
         console.error('Failed to send message:', error);
         // Handle error

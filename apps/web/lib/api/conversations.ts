@@ -31,7 +31,7 @@ export async function getConversations() {
     const { data, error } = await supabase
         .from('conversations')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false }); // Sort by recently active
 
     if (error) {
         console.error('Error fetching conversations:', error);
@@ -56,4 +56,18 @@ export async function getConversation(id: string) {
     }
 
     return data;
+}
+
+export async function updateConversationTitle(id: string, title: string) {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+        .from('conversations')
+        .update({ title, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error updating conversation title:', error);
+        throw error;
+    }
 }
