@@ -71,3 +71,17 @@ export async function updateConversationTitle(id: string, title: string) {
         throw error;
     }
 }
+
+export async function deleteConversation(id: string) {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+        .from('conversations')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error('Error deleting conversation:', error);
+        throw error;
+    }
+}

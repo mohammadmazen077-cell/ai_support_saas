@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Test Page</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="content">
+        <h1>Widget Test Page</h1>
+        <p>This page simulates a customer's website.</p>
+        <p>Look for the chat button in the bottom-right corner.</p>
+
+        <h2>Instructions</h2>
+        <ol>
+            <li>Click the chat button.</li>
+            <li>Send a message (e.g., "Hello, I need help").</li>
+            <li>Verify the AI responds.</li>
+            <li>Go to <a href="/dashboard/customer-chats">Dashboard -> Customer Chats</a> to see the conversation.</li>
+        </ol>
+
+        <!-- Widget Embed Code -->
+        <!-- Replace data-business-id with your actual User ID from Supabase Auth -->
+        <!-- Since we don't know the exact ID here, we'll try to use a placeholder or ask user to replace it. -->
+        <!-- Ideally we default to the currently logged in user if I could get it, but I can't. -->
+        <!-- I will add a script to prompt or just use a dummy which will fail RLS if not matching but works for public insert -->
+
+        <script>
+            // Helper to get ID from URL or prompt
+            const params = new URLSearchParams(window.location.search);
+            const businessId = params.get('id') || 'aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79';
+
+            if (businessId === 'aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79') {
+                document.write('<p style="color:red; font-weight:bold;">WARNING: Please add ?id=YOUR_USER_ID to the URL to test with your account.</p>');
+            }
+
+            const script = document.createElement('script');
+            script.src = "/widget.js";
+            script.setAttribute('data-business-id', businessId);
+            document.body.appendChild(script);
+        </script>
+    </div>
+</body>
+
+</html>

@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 const navigation = [
     { name: 'Overview', href: '/dashboard' },
     { name: 'Conversations', href: '/dashboard/conversations' },
-    { name: 'Data Sources', href: '/dashboard/data-sources' },
+    { name: 'Customer Chats', href: '/dashboard/customer-chats' },
+    { name: 'Knowledge Base', href: '/dashboard/knowledge' },
     { name: 'Settings', href: '/dashboard/settings' },
 ];
 
@@ -27,8 +28,8 @@ const Sidebar = () => {
                             key={item.name}
                             href={item.href}
                             className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive
-                                    ? 'bg-gray-800 text-white'
-                                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                                ? 'bg-gray-800 text-white'
+                                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                                 }`}
                         >
                             {item.name}

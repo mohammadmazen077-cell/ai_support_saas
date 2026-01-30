@@ -42,7 +42,12 @@ export async function addMessageAction(conversationId: string, content: string) 
         // Construct full history for context
         const fullContext = [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content }];
 
-        const aiResponse = await generateAIResponse(fullContext);
+        // Get the current user for RAG context
+        const { createClient } = await import('@/utils/supabase/server');
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        const aiResponse = await generateAIResponse(fullContext, user?.id);
 
         // 5. Save AI Message
         await addMessage(conversationId, 'assistant', aiResponse.content, aiResponse.metadata);
@@ -52,5 +57,26 @@ export async function addMessageAction(conversationId: string, content: string) 
     } catch (error) {
         console.error('Failed to send message:', error);
         // Handle error
+    }
+}
+
+export async function deleteConversationsAction(ids: string[]) {
+    try {
+        if (!ids || ids.length === 0) return;
+
+        // In a real app we might want to parallelize these or use a 'in' query if the API supports it
+        // Supabase 'in' query would be better: .in('id', ids)
+        // But for now let's reuse the single delete or loop, assuming our API layer handles single deletes.
+        // Actually, let's just loop for simplicity with the existing/new API.
+
+        // Better yet, let's import the deleteConversation function we just added
+        const { deleteConversation } = await import('@/lib/api/conversations');
+
+        await Promise.all(ids.map(id => deleteConversation(id)));
+
+        revalidatePath('/dashboard/conversations');
+    } catch (error) {
+        console.error('Failed to delete conversations:', error);
+        throw error;
     }
 }
