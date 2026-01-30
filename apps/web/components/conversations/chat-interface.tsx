@@ -16,7 +16,7 @@ interface ChatInterfaceProps {
 }
 function TypewriterText({
     text,
-    speed = 20,
+    speed = 8,
 }: {
     text: string;
     speed?: number;
@@ -25,19 +25,30 @@ function TypewriterText({
 
     useEffect(() => {
         let i = 0;
+        let interval: NodeJS.Timeout;
+
         setDisplayed('');
 
-        const interval = setInterval(() => {
-            i++;
-            setDisplayed(text.slice(0, i));
+        const startTyping = () => {
+            interval = setInterval(() => {
+                i++;
+                setDisplayed(text.slice(0, i));
 
-            if (i >= text.length) {
-                clearInterval(interval);
-            }
-        }, speed);
+                if (i >= text.length) {
+                    clearInterval(interval);
+                }
+            }, speed);
+        };
 
-        return () => clearInterval(interval);
+        // 👇 SMALL DELAY AFTER DOTS DISAPPEAR
+        const timeout = setTimeout(startTyping, 250); // 150–250ms sweet spot
+
+        return () => {
+            clearTimeout(timeout);
+            clearInterval(interval);
+        };
     }, [text, speed]);
+
 
     return <span>{displayed}</span>;
 }
