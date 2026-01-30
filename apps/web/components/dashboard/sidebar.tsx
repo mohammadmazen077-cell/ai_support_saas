@@ -1,6 +1,18 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+
+const navigation = [
+    { name: 'Overview', href: '/dashboard' },
+    { name: 'Conversations', href: '/dashboard/conversations' },
+    { name: 'Data Sources', href: '/dashboard/data-sources' },
+    { name: 'Settings', href: '/dashboard/settings' },
+];
 
 const Sidebar = () => {
+    const pathname = usePathname();
+
     return (
         <aside className="w-64 bg-gray-900 text-white h-screen flex flex-col border-r border-gray-800">
             <div className="p-6">
@@ -8,30 +20,21 @@ const Sidebar = () => {
             </div>
 
             <nav className="flex-1 px-4 space-y-2">
-                <Link
-                    href="/dashboard"
-                    className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors"
-                >
-                    Overview
-                </Link>
-                <Link
-                    href="/dashboard/conversations"
-                    className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors"
-                >
-                    Conversations
-                </Link>
-                <Link
-                    href="/dashboard/data-sources"
-                    className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors"
-                >
-                    Data Sources
-                </Link>
-                <Link
-                    href="/dashboard/settings"
-                    className="flex items-center px-4 py-2.5 text-sm font-medium text-gray-300 rounded-lg hover:bg-gray-800 hover:text-white transition-colors"
-                >
-                    Settings
-                </Link>
+                {navigation.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                        <Link
+                            key={item.name}
+                            href={item.href}
+                            className={`flex items-center px-4 py-2.5 text-sm font-medium rounded-lg transition-colors ${isActive
+                                    ? 'bg-gray-800 text-white'
+                                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                                }`}
+                        >
+                            {item.name}
+                        </Link>
+                    );
+                })}
             </nav>
 
             <div className="p-4 border-t border-gray-800">

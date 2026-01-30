@@ -14,6 +14,33 @@ interface ChatInterfaceProps {
     conversationId: string;
     initialMessages: Message[];
 }
+function TypewriterText({
+    text,
+    speed = 20,
+}: {
+    text: string;
+    speed?: number;
+}) {
+    const [displayed, setDisplayed] = useState('');
+
+    useEffect(() => {
+        let i = 0;
+        setDisplayed('');
+
+        const interval = setInterval(() => {
+            i++;
+            setDisplayed(text.slice(0, i));
+
+            if (i >= text.length) {
+                clearInterval(interval);
+            }
+        }, speed);
+
+        return () => clearInterval(interval);
+    }, [text, speed]);
+
+    return <span>{displayed}</span>;
+}
 
 export default function ChatInterface({ conversationId, initialMessages }: ChatInterfaceProps) {
     const [isPending, setIsPending] = useState(false);
@@ -34,6 +61,8 @@ export default function ChatInterface({ conversationId, initialMessages }: ChatI
         const content = formData.get('content') as string;
         if (!content.trim()) return;
 
+        const typingId = 'typing-' + Date.now();
+
         // Add optimistic user message immediately
         addOptimisticMessage({
             id: 'temp-' + Date.now(),
@@ -41,6 +70,15 @@ export default function ChatInterface({ conversationId, initialMessages }: ChatI
             content: content,
             created_at: new Date().toISOString(),
         });
+
+
+        addOptimisticMessage({
+            id: typingId,
+            role: 'assistant',
+            content: '__typing__',
+            created_at: new Date().toISOString(),
+        });
+
 
         setIsPending(true);
         // Optimistically clear form
@@ -69,9 +107,28 @@ export default function ChatInterface({ conversationId, initialMessages }: ChatI
                                     }`}
                             >
                                 <div className="text-xs opacity-70 mb-1 capitalize">{message.role}</div>
-                                <p className="whitespace-pre-wrap">{message.content}</p>
+                                {message.content === '__typing__' ? (
+                                    <div className="flex space-x-2 items-center h-6">
+                                        <div className="w-4 h-4 bg-gray-700 rounded-full animate-bounce"></div>
+                                        <div className="w-4 h-4 bg-gray-700 rounded-full animate-bounce [animation-delay:150ms]"></div>
+                                        <div className="w-4 h-4 bg-gray-700 rounded-full animate-bounce [animation-delay:300ms]"></div>
+                                    </div>
+                                ) : (
+                                    <p className="whitespace-pre-wrap">
+                                        {message.role === 'assistant' ? (
+                                            <TypewriterText text={message.content} />
+                                        ) : (
+                                            message.content
+                                        )}
+                                    </p>
+
+                                )}
+
                                 <div className="text-xs opacity-50 mt-2 text-right">
-                                    {new Date(message.created_at).toLocaleTimeString()}
+                                    {new Date(message.created_at).toLocaleTimeString([], {
+                                        hour: 'numeric',
+                                        minute: '2-digit',
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -79,18 +136,6 @@ export default function ChatInterface({ conversationId, initialMessages }: ChatI
                 ) : (
                     <div className="flex h-full items-center justify-center text-gray-400">
                         <p>No messages yet. Start the conversation!</p>
-                    </div>
-                )}
-
-                {isPending && (
-                    <div className="flex justify-start">
-                        <div className="bg-white border border-gray-200 text-gray-800 rounded-lg p-4 max-w-[80%]">
-                            <div className="flex space-x-2 items-center h-6">
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                            </div>
-                        </div>
                     </div>
                 )}
                 <div ref={messagesEndRef} />
