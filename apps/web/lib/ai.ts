@@ -19,22 +19,33 @@ Off-Topic Handling Rule:
 If the user asks for anything unrelated to customer support (e.g., jokes, poems, general knowledge, personal questions, creative writing), you MUST NOT answer the request.
 Instead, respond with a brief, polite redirection explaining that you can only help with customer support–related questions.`;
 
+/** Below this similarity we hand off to human (no/low confidence). */
+const HANDOFF_CONFIDENCE_THRESHOLD = 0.6;
+
 export async function generateAIResponse(
     messages: { role: string; content: string }[],
     businessId?: string
-): Promise<{ content: string; metadata: any }> {
+): Promise<{ content: string; metadata: { needsHandoff?: boolean; [key: string]: unknown } }> {
     let systemPrompt = BASE_SYSTEM_PROMPT;
 
-    // If businessId is provided, attempt RAG retrieval
+    // If businessId is provided, attempt RAG retrieval; may trigger human handoff
     if (businessId && messages.length > 0) {
-        // Get the last user message to use as the query
         const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
 
         if (lastUserMessage) {
-            const context = await retrieveContext(businessId, lastUserMessage.content);
+            const { context, topSimilarity } = await retrieveContext(businessId, lastUserMessage.content);
+
+            const noContext = !context || context.length === 0;
+            const lowConfidence = topSimilarity !== null && topSimilarity < HANDOFF_CONFIDENCE_THRESHOLD;
+
+            if (noContext || lowConfidence) {
+                return {
+                    content: "I'm not confident enough to answer this. I've notified our team to help you.",
+                    metadata: { needsHandoff: true },
+                };
+            }
 
             if (context) {
-                // Inject retrieved context into the system prompt
                 systemPrompt = `${BASE_SYSTEM_PROMPT}
 
 IMPORTANT: Use the following retrieved context to answer the user's question. You MUST ONLY use information from this context. Do not use any external knowledge.

@@ -6,11 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "backfill:embeddings": "tsx scripts/backfill-knowledge-embeddings.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.93.2",
+    "dotenv": "^17.2.3",
     "next": "16.1.6",
     "openai": "^6.17.0",
     "react": "19.2.3",
@@ -24,6 +26,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

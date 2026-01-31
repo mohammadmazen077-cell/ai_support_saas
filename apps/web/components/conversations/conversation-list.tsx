@@ -110,8 +110,8 @@ export default function ConversationList({ conversations }: { conversations: Con
                     // Default Header
                     <>
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-900">Conversations</h1>
-                            <p className="mt-1 text-gray-600">Manage your AI support conversations.</p>
+                            <h1 className="text-3xl font-bold text-gray-900">AI Testing</h1>
+                            <p className="mt-1 text-gray-600">Test the AI with sample conversations.</p>
                         </div>
                         <div className="flex items-center space-x-3">
                             {conversations.length > 0 && (
@@ -144,7 +144,7 @@ export default function ConversationList({ conversations }: { conversations: Con
                                     type="submit"
                                     className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
                                 >
-                                    New Conversation
+                                    New test
                                 </button>
                             </form>
                         </div>

@@ -5,11 +5,33 @@ import { redirect } from 'next/navigation'
 
 import { createClient } from '@/utils/supabase/server'
 
-export async function login(formData: FormData) {
-    const supabase = await createClient()
+const MAX_EMAIL_LENGTH = 254
+const MAX_PASSWORD_LENGTH = 512
+const MIN_PASSWORD_LENGTH = 6
 
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+function validateEmail(email: unknown): string | null {
+    if (typeof email !== 'string' || !email.trim()) return null
+    const trimmed = email.trim()
+    if (trimmed.length > MAX_EMAIL_LENGTH) return null
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(trimmed) ? trimmed : null
+}
+
+function validatePassword(password: unknown): string | null {
+    if (typeof password !== 'string') return null
+    if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) return null
+    return password
+}
+
+export async function login(formData: FormData) {
+    const email = validateEmail(formData.get('email'))
+    const password = validatePassword(formData.get('password'))
+
+    if (!email || !password) {
+        redirect('/login?error=Invalid credentials')
+    }
+
+    const supabase = await createClient()
 
     const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -25,10 +47,14 @@ export async function login(formData: FormData) {
 }
 
 export async function signup(formData: FormData) {
-    const supabase = await createClient()
+    const email = validateEmail(formData.get('email'))
+    const password = validatePassword(formData.get('password'))
 
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+    if (!email || !password) {
+        redirect('/login?error=Invalid credentials')
+    }
+
+    const supabase = await createClient()
 
     const { error } = await supabase.auth.signUp({
         email,

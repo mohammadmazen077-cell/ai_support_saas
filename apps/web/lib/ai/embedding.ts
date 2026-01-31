@@ -1,5 +1,13 @@
 import OpenAI from 'openai';
 
+// Validate that OPENAI_API_KEY is present
+if (!process.env.OPENAI_API_KEY) {
+    throw new Error(
+        'OPENAI_API_KEY is not set. Please add it to your .env.local file.\n' +
+        'Example: OPENAI_API_KEY=sk-...'
+    );
+}
+
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });

@@ -2,8 +2,11 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { generateAIResponse } from '@/lib/ai';
+import { validateUUID, LIMITS } from '@/lib/validation';
 
 export async function getOrCreateCustomerConversation(businessId: string, visitorId: string) {
+    validateUUID(businessId, 'businessId');
+    validateUUID(visitorId, 'visitorId');
     const supabase = await createClient();
 
     // Use the RPC function to securely get/create conversation as anonymous visitor
@@ -23,6 +26,9 @@ export async function getOrCreateCustomerConversation(businessId: string, visito
 }
 
 export async function getCustomerMessages(businessId: string, visitorId: string) {
+    validateUUID(businessId, 'businessId');
+    validateUUID(visitorId, 'visitorId');
+
     const supabase = await createClient();
 
     const { data, error } = await supabase
@@ -39,68 +45,82 @@ export async function getCustomerMessages(businessId: string, visitorId: string)
     return data || [];
 }
 
-export async function sendCustomerMessage(businessId: string, visitorId: string, content: string) {
+export type SendMessageResult = {
+    content: string | null;
+    escalated?: boolean;
+    waitingForHuman?: boolean;
+};
+
+export async function sendCustomerMessage(
+    businessId: string,
+    visitorId: string,
+    content: string
+): Promise<SendMessageResult> {
+    validateUUID(businessId, 'businessId');
+    validateUUID(visitorId, 'visitorId');
+    if (typeof content !== 'string' || content.length > LIMITS.MESSAGE_CONTENT_MAX) {
+        throw new Error('Invalid message content');
+    }
+
     const supabase = await createClient();
 
-    if (!content.trim()) return;
+    if (!content.trim()) return { content: null };
 
-    // 1. Get Conversation ID (securely)
     const conversation = await getOrCreateCustomerConversation(businessId, visitorId);
     if (!conversation) throw new Error('Conversation not found');
 
     const conversationId = conversation.id;
+    const status = (conversation as { status?: string }).status ?? 'open';
 
-    // 2. Insert User Message
-    // Public insert is allowed by RLS for 'customer_messages', but let's just use standard insert.
-    // We already verified the conversation belongs to this visitor via getOrCreate.
-    const { error: insertError } = await supabase
-        .from('customer_messages')
-        .insert({
-            conversation_id: conversationId,
-            role: 'visitor',
-            content: content
-        });
+    // Insert visitor message via RPC (validates visitor owns conversation)
+    const { error: insertError } = await supabase.rpc('insert_visitor_message', {
+        p_conversation_id: conversationId,
+        p_visitor_id: visitorId,
+        p_business_id: businessId,
+        p_content: content.trim(),
+    });
 
     if (insertError) {
         console.error('Error sending message:', insertError);
         throw new Error('Failed to send message');
     }
 
-    // 3. Generate AI Response
-    // We need history for context.
-    const history = await getCustomerMessages(businessId, visitorId);
+    // While waiting for human, do not call AI; just confirm message received
+    if (status === 'waiting_for_human') {
+        return { content: null, waitingForHuman: true };
+    }
 
-    // Format for AI
-    const aiContext = history.map((msg: any) => ({
+    const history = await getCustomerMessages(businessId, visitorId);
+    const aiContext = history.map((msg: { role: string; content: string }) => ({
         role: msg.role === 'visitor' ? 'user' : 'assistant',
-        content: msg.content
+        content: msg.content,
     }));
 
-    // AI Call with RAG (uses centralized SYSTEM_PROMPT from lib/ai.ts)
     const aiResponse = await generateAIResponse(aiContext, businessId);
 
-    // 4. Insert Assistant Message
-    // Since we are anonymous, public RLS allows insert?
-    // "Policy: Public/Visitors can INSERT messages into their conversations"
-    // Wait, usually the SERVER (us) should insert the assistant message.
-    // But we are using the same client (anon).
-    // The RLS policy `customer_messages_insert_public` allows insert `with check (true)`.
-    // So anyone can insert to any conversation if they know the ID.
-    // This is weaker security but acceptable for this demo phase given we don't have service role key.
-    // Ideally we'd use a service role key here to insert the assistant message to ensure it's "authorized".
-    // For now, it works.
+    if (aiResponse.metadata?.needsHandoff) {
+        await supabase.rpc('escalate_customer_conversation', {
+            p_conversation_id: conversationId,
+            p_visitor_id: visitorId,
+            p_business_id: businessId,
+        });
+    }
 
     const { error: aiInsertError } = await supabase
         .from('customer_messages')
         .insert({
             conversation_id: conversationId,
             role: 'assistant',
-            content: aiResponse.content
+            content: aiResponse.content,
+            sender: 'ai',
         });
 
     if (aiInsertError) {
         console.error('Error saving AI response:', aiInsertError);
     }
 
-    return aiResponse.content;
+    return {
+        content: aiResponse.content,
+        escalated: !!aiResponse.metadata?.needsHandoff,
+    };
 }

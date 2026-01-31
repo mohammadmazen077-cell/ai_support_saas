@@ -22,7 +22,9 @@ export async function createConversationAction() {
 
 export async function addMessageAction(conversationId: string, content: string) {
     try {
-        if (!content.trim()) return;
+        const { validateUUID, LIMITS } = await import('@/lib/validation');
+        validateUUID(conversationId, 'conversationId');
+        if (typeof content !== 'string' || content.length > LIMITS.MESSAGE_CONTENT_MAX || !content.trim()) return;
 
         // 1. Fetch History (need checks if it's the first message)
         const history = await getMessages(conversationId);
@@ -62,7 +64,8 @@ export async function addMessageAction(conversationId: string, content: string) 
 
 export async function deleteConversationsAction(ids: string[]) {
     try {
-        if (!ids || ids.length === 0) return;
+        const { isValidUUID } = await import('@/lib/validation');
+        if (!Array.isArray(ids) || ids.length === 0 || ids.some((id) => !isValidUUID(id))) return;
 
         // In a real app we might want to parallelize these or use a 'in' query if the API supports it
         // Supabase 'in' query would be better: .in('id', ids)

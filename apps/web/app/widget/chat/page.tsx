@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getCustomerMessages, sendCustomerMessage } from '@/app/widget/actions';
+import { getOrCreateCustomerConversation, getCustomerMessages, sendCustomerMessage } from '@/app/widget/actions';
 
 interface Message {
     role: 'visitor' | 'assistant';
     content: string;
     created_at?: string;
+    sender?: 'ai' | 'human';
 }
+
+type ConversationStatus = 'open' | 'waiting_for_human' | 'closed';
 
 export default function WidgetChatPage() {
     const searchParams = useSearchParams();
@@ -17,8 +20,10 @@ export default function WidgetChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [visitorId, setVisitorId] = useState<string | null>(null);
+    const [conversationStatus, setConversationStatus] = useState<ConversationStatus>('open');
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
+    const [agentTyping, setAgentTyping] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -34,33 +39,122 @@ export default function WidgetChatPage() {
         }
     }, []);
 
-    // Load History
+    // Load conversation + messages (to get status for handoff UI)
     useEffect(() => {
-        async function loadHistory() {
+        async function load() {
             if (!businessId || !visitorId) return;
             try {
-                const history = await getCustomerMessages(businessId, visitorId);
-                // Convert DB messages to local format
-                const formatted = history.map((msg: any) => ({
+                const [conv, history] = await Promise.all([
+                    getOrCreateCustomerConversation(businessId, visitorId),
+                    getCustomerMessages(businessId, visitorId),
+                ]);
+                const formatted = history.map((msg: { role: string; content: string; created_at?: string; sender?: string }) => ({
                     role: msg.role,
                     content: msg.content,
-                    created_at: msg.created_at
+                    created_at: msg.created_at,
+                    sender: msg.sender === 'human' ? 'human' : 'ai',
                 }));
                 setMessages(formatted);
+                // If human has already replied, treat as open (hide "human will respond shortly")
+                const hasHumanReply = formatted.some((m: { sender?: string }) => m.sender === 'human');
+                // Only leave waiting_for_human when a human actually sent a message; never based on status alone
+                setConversationStatus((prev) =>
+                    hasHumanReply ? 'open' : prev === 'waiting_for_human' ? 'waiting_for_human' : ((conv as { status?: ConversationStatus })?.status ?? 'open')
+                );
             } catch (error) {
-                console.error("Failed to load history", error);
+                console.error('Failed to load', error);
             } finally {
                 setIsLoading(false);
             }
         }
-
-        loadHistory();
+        load();
     }, [businessId, visitorId]);
 
-    // Scroll to bottom
+    // Refetch messages when tab/window gains focus so human replies appear without full refresh
+    useEffect(() => {
+        if (!businessId || !visitorId) return;
+        const refetch = async () => {
+            try {
+                const [conv, history] = await Promise.all([
+                    getOrCreateCustomerConversation(businessId, visitorId),
+                    getCustomerMessages(businessId, visitorId),
+                ]);
+                const formatted = history.map((msg: { role: string; content: string; created_at?: string; sender?: string }) => ({
+                    role: msg.role,
+                    content: msg.content,
+                    created_at: msg.created_at,
+                    sender: msg.sender === 'human' ? 'human' : 'ai',
+                }));
+                setMessages(formatted);
+                const hasHumanReply = formatted.some((m: { sender?: string }) => m.sender === 'human');
+                // Only leave waiting_for_human when a human actually sent a message; never based on status alone
+                setConversationStatus((prev) =>
+                    hasHumanReply ? 'open' : prev === 'waiting_for_human' ? 'waiting_for_human' : ((conv as { status?: ConversationStatus })?.status ?? 'open')
+                );
+                if (hasHumanReply) setAgentTyping(false);
+            } catch {
+                // ignore
+            }
+        };
+        const onFocus = () => refetch();
+        const onVisibility = () => {
+            if (document.visibilityState === 'visible') refetch();
+        };
+        window.addEventListener('focus', onFocus);
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => {
+            window.removeEventListener('focus', onFocus);
+            document.removeEventListener('visibilitychange', onVisibility);
+        };
+    }, [businessId, visitorId]);
+
+    const prevHumanCountRef = useRef(0);
+    useEffect(() => {
+        if (conversationStatus === 'waiting_for_human') {
+            prevHumanCountRef.current = messages.filter((m) => m.sender === 'human').length;
+        }
+    }, [conversationStatus]);
+
+    // When waiting for human, poll frequently for agent_sending_at (typing) and new messages
+    useEffect(() => {
+        if (!businessId || !visitorId || conversationStatus !== 'waiting_for_human') return;
+        const interval = setInterval(async () => {
+            try {
+                const [conv, history] = await Promise.all([
+                    getOrCreateCustomerConversation(businessId, visitorId),
+                    getCustomerMessages(businessId, visitorId),
+                ]);
+                const formatted = history.map((msg: { role: string; content: string; created_at?: string; sender?: string }) => ({
+                    role: msg.role,
+                    content: msg.content,
+                    created_at: msg.created_at,
+                    sender: msg.sender === 'human' ? 'human' : 'ai',
+                }));
+                const agentTypingAt = (conv as { agent_typing_at?: string | null })?.agent_typing_at;
+                const agentSendingAt = (conv as { agent_sending_at?: string | null })?.agent_sending_at;
+                const hasHumanReply = formatted.some((m: { sender?: string }) => m.sender === 'human');
+                prevHumanCountRef.current = formatted.filter((m: { sender?: string }) => m.sender === 'human').length;
+
+                // Show three-dot typing when agent is typing in reply input or briefly while sending
+                if (agentTypingAt || agentSendingAt) setAgentTyping(true);
+                else setAgentTyping(false);
+
+                if (hasHumanReply) {
+                    setMessages(formatted);
+                    setConversationStatus('open');
+                    setAgentTyping(false);
+                }
+            } catch {
+                // ignore
+            }
+        }, 500);
+        return () => clearInterval(interval);
+    }, [businessId, visitorId, conversationStatus]);
+
+    // Scroll to bottom when messages change, sending, or agent typing
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isSending]);
+    }, [messages, isSending, agentTyping]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,22 +163,30 @@ export default function WidgetChatPage() {
         const content = inputValue.trim();
         setInputValue('');
 
-        // Optimistic Update
-        setMessages(prev => [...prev, { role: 'visitor', content }]);
+        setMessages((prev) => [...prev, { role: 'visitor', content }]);
         setIsSending(true);
 
         try {
-            const response = await sendCustomerMessage(businessId, visitorId, content);
-            if (response) {
-                setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+            const result = await sendCustomerMessage(businessId, visitorId, content);
+
+            if (result.escalated) {
+                setConversationStatus('waiting_for_human');
+                if (result.content) {
+                    setMessages((prev) => [...prev, { role: 'assistant', content: result.content!, sender: 'ai' }]);
+                }
+            } else if (result.waitingForHuman) {
+                setConversationStatus('waiting_for_human');
+            } else if (result.content) {
+                setMessages((prev) => [...prev, { role: 'assistant', content: result.content!, sender: 'ai' }]);
             }
         } catch (error) {
-            console.error("Failed to send message", error);
-            // Optionally show error to user
+            console.error('Failed to send message', error);
         } finally {
             setIsSending(false);
         }
     };
+
+    const isWaitingForHuman = conversationStatus === 'waiting_for_human';
 
     if (!businessId) {
         return <div className="p-4 text-center text-red-500">Missing Business Configuration</div>;
@@ -109,18 +211,41 @@ export default function WidgetChatPage() {
                         <p>👋 Hi there! How can we help you today?</p>
                     </div>
                 ) : (
-                    messages.map((msg, idx) => (
-                        <div key={idx} className={`flex ${msg.role === 'visitor' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === 'visitor'
-                                    ? 'bg-indigo-600 text-white rounded-br-none'
-                                    : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-none'
-                                }`}>
-                                {msg.content}
+                    messages.map((msg, idx) => {
+                        const isVisitor = msg.role === 'visitor';
+                        const label = isVisitor ? 'You' : msg.sender === 'human' ? 'Support Agent' : 'AI Support';
+                        return (
+                            <div key={idx} className={`flex ${isVisitor ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${isVisitor
+                                        ? 'bg-indigo-600 text-white rounded-br-none'
+                                        : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-none'
+                                    }`}>
+                                    {!isVisitor && (
+                                        <span className="block text-xs font-medium text-gray-500 mb-1">{label}</span>
+                                    )}
+                                    {msg.content}
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
-                {isSending && (
+                {isWaitingForHuman && !agentTyping && (
+                    <div className="flex justify-center">
+                        <div className="rounded-2xl px-4 py-2.5 text-sm bg-amber-50 text-amber-800 border border-amber-200">
+                            A human support agent will respond shortly.
+                        </div>
+                    </div>
+                )}
+                {agentTyping && (
+                    <div className="flex justify-start">
+                        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-none px-4 py-3 flex space-x-1 items-center">
+                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]"></div>
+                            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]"></div>
+                        </div>
+                    </div>
+                )}
+                {isSending && !agentTyping && (
                     <div className="flex justify-start">
                         <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-none px-4 py-3 flex space-x-1 items-center">
                             <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
@@ -145,6 +270,7 @@ export default function WidgetChatPage() {
                     <button
                         type="submit"
                         disabled={!inputValue.trim() || isSending}
+                        title={isWaitingForHuman ? 'An agent will reply; you can still send messages.' : undefined}
                         className="bg-indigo-600 text-white p-2 rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         <svg className="w-5 h-5 translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

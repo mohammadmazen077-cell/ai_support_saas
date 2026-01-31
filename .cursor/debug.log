@@ -1,0 +1,38 @@
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1","timestamp":1769866657247,"sessionId":"debug-session"}
+{"location":"lib/ai.ts:generateAIResponse","message":"RAG entry","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","messagesLen":1},"timestamp":1769866657249,"sessionId":"debug-session","hypothesisId":"H1"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3","timestamp":1769866657469,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":0,"hasContext":false},"hypothesisId":"H3,H4,H5","timestamp":1769866658054,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"match_knowledge RPC result","data":{"rpcError":null,"matchCount":0},"timestamp":1769866658044,"sessionId":"debug-session","hypothesisId":"H4"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":0,"hasContext":false},"hypothesisId":"H3,H4,H5"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1","timestamp":1769866765357,"sessionId":"debug-session"}
+{"location":"lib/ai.ts:generateAIResponse","message":"RAG entry","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","messagesLen":3},"timestamp":1769866765359,"sessionId":"debug-session","hypothesisId":"H1"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3","timestamp":1769866765678,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Final context","data":{"finalContextLen":93},"hypothesisId":"H5","timestamp":1769866766568,"sessionId":"debug-session"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":93,"hasContext":true},"hypothesisId":"H3,H4,H5","timestamp":1769866766572,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"match_knowledge RPC result","data":{"rpcError":null,"matchCount":1},"timestamp":1769866766552,"sessionId":"debug-session","hypothesisId":"H4"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Final context","data":{"finalContextLen":93},"hypothesisId":"H5"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":93,"hasContext":true},"hypothesisId":"H3,H4,H5"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1","timestamp":1769866858213,"sessionId":"debug-session"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1"}
+{"location":"lib/ai.ts:generateAIResponse","message":"RAG entry","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","messagesLen":1},"timestamp":1769866858216,"sessionId":"debug-session","hypothesisId":"H1"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3","timestamp":1769866858420,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Final context","data":{"finalContextLen":78},"hypothesisId":"H5","timestamp":1769866859099,"sessionId":"debug-session"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":78,"hasContext":true},"hypothesisId":"H3,H4,H5","timestamp":1769866859104,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Final context","data":{"finalContextLen":78},"hypothesisId":"H5"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"match_knowledge RPC result","data":{"rpcError":null,"matchCount":1},"timestamp":1769866859081,"sessionId":"debug-session","hypothesisId":"H4"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":78,"hasContext":true},"hypothesisId":"H3,H4,H5"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1","timestamp":1769866871500,"sessionId":"debug-session"}
+{"location":"lib/ai.ts:generateAIResponse","message":"RAG entry","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","messagesLen":3},"timestamp":1769866871502,"sessionId":"debug-session","hypothesisId":"H1"}
+{"location":"conversations/actions.ts:addMessageAction","message":"RAG businessId from user","data":{"userId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","hasUser":true},"hypothesisId":"H1"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3","timestamp":1769866871785,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Embedded chunks check","data":{"businessId":"aacf3afc-c7d7-41d9-bbbb-9a120d3e4f79","checkError":null,"embeddedCount":1},"hypothesisId":"H2,H3"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Final context","data":{"finalContextLen":93},"hypothesisId":"H5","timestamp":1769866872336,"sessionId":"debug-session"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":93,"hasContext":true},"hypothesisId":"H3,H4,H5","timestamp":1769866872342,"sessionId":"debug-session"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"match_knowledge RPC result","data":{"rpcError":null,"matchCount":1},"timestamp":1769866872318,"sessionId":"debug-session","hypothesisId":"H4"}
+{"location":"lib/ai/rag.ts:retrieveContext","message":"Final context","data":{"finalContextLen":93},"hypothesisId":"H5"}
+{"location":"lib/ai.ts:generateAIResponse","message":"After retrieveContext","data":{"contextLen":93,"hasContext":true},"hypothesisId":"H3,H4,H5"}
