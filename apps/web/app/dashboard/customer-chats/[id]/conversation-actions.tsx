@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { sendHumanReply, updateConversationStatus, setAgentTyping } from '../actions';
+import { createClient } from '@/utils/supabase/client';
+import { sendHumanReply, updateConversationStatus } from '../actions';
 
 const TYPING_DEBOUNCE_MS = 300;
 
@@ -11,19 +12,65 @@ export function ConversationActions({ conversationId }: { conversationId: string
     const [isPending, setIsPending] = useState(false);
     const [replyContent, setReplyContent] = useState('');
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const supabase = createClient();
 
-    // Signal "agent is typing" when they focus or type in the reply input (so widget hides "respond shortly" and shows three dots)
-    const signalTyping = () => {
+    // Signal "agent is typing" via Realtime Broadcast
+    const broadcastTyping = async (isTyping: boolean) => {
+        const channel = supabase.channel(`conversation:${conversationId}`);
+        await channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'agent:typing',
+                    payload: { isTyping },
+                });
+                // We don't need to keep the subscription open just for one-off sends if we want,
+                // but usually it's better to keep one connection. 
+                // However, for simplicity here, we rely on the fact that if we use the same topic, 
+                // Supabase client might reuse the channel or we should manage subscription better.
+                // A better pattern for repeated events is to hold the channel in a ref or effect.
+            }
+        });
+    };
+
+    // Better approach: Maintain a persistent channel subscription for the component lifecycle
+    useEffect(() => {
+        const channel = supabase.channel(`conversation:${conversationId}`);
+        channel.subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [conversationId, supabase]);
+
+    const sendTypingSignal = async (isTyping: boolean) => {
+        const channel = supabase.channel(`conversation:${conversationId}`);
+        // We assume it's subscribed from the effect, but we can try sending.
+        // If "SUBSCRIBED", it sends. If not, it might drop. 
+        // For robustness, we check state or await subscribe if needed.
+        // Because we subscribe in useEffect, let's just send.
+        await channel.send({
+            type: 'broadcast',
+            event: 'agent:typing',
+            payload: { isTyping },
+        });
+    };
+
+    const handleTyping = (isTyping: boolean) => {
         if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current);
             typingTimeoutRef.current = null;
         }
-        setAgentTyping(conversationId, true);
-    };
 
-    const scheduleTypingSignal = () => {
-        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(signalTyping, TYPING_DEBOUNCE_MS);
+        if (isTyping) {
+            sendTypingSignal(true);
+            // Auto-stop after delay if no more keystrokes
+            typingTimeoutRef.current = setTimeout(() => {
+                sendTypingSignal(false);
+            }, 2000);
+        } else {
+            sendTypingSignal(false);
+        }
     };
 
     // Clear typing when agent leaves this conversation (unmount)
@@ -31,9 +78,10 @@ export function ConversationActions({ conversationId }: { conversationId: string
         return () => {
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
-                typingTimeoutRef.current = null;
             }
-            setAgentTyping(conversationId, false);
+            // Attempt to send stop typing signal on unmount
+            // Note: This might not always succeed if connection closes immediately
+            sendTypingSignal(false);
         };
     }, [conversationId]);
 
@@ -41,6 +89,10 @@ export function ConversationActions({ conversationId }: { conversationId: string
         e.preventDefault();
         const content = replyContent.trim();
         if (!content || isPending) return;
+
+        // Stop typing indicator immediately
+        handleTyping(false);
+
         setIsPending(true);
         try {
             await sendHumanReply(conversationId, content);
@@ -70,9 +122,10 @@ export function ConversationActions({ conversationId }: { conversationId: string
                     value={replyContent}
                     onChange={(e) => {
                         setReplyContent(e.target.value);
-                        scheduleTypingSignal();
+                        handleTyping(true);
                     }}
-                    onFocus={signalTyping}
+                    onFocus={() => handleTyping(true)}
+                    onBlur={() => handleTyping(false)}
                     placeholder="Type your reply as a human agent..."
                     className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                     disabled={isPending}

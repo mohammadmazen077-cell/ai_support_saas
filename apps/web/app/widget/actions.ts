@@ -99,11 +99,56 @@ export async function sendCustomerMessage(
     const aiResponse = await generateAIResponse(aiContext, businessId);
 
     if (aiResponse.metadata?.needsHandoff) {
-        await supabase.rpc('escalate_customer_conversation', {
+        const { error: escalationError } = await supabase.rpc('escalate_customer_conversation', {
             p_conversation_id: conversationId,
             p_visitor_id: visitorId,
             p_business_id: businessId,
         });
+
+        if (!escalationError) {
+            // ---------------------------------------------------------
+            // EMAIL NOTIFICATION LOGIC
+            // ---------------------------------------------------------
+            try {
+                // 1. Check if email already sent (to avoid duplicates if called multiple times)
+                const { data: convData } = await supabase
+                    .from('customer_conversations')
+                    .select('escalation_notified_at')
+                    .eq('id', conversationId)
+                    .single();
+
+                if (!convData?.escalation_notified_at) {
+                    // 2. Check business settings
+                    const { data: settings } = await supabase
+                        .from('business_settings')
+                        .select('escalation_notifications_enabled')
+                        .eq('user_id', businessId)
+                        .single();
+
+                    // Default to true if no settings row exists yet
+                    const shouldSend = settings ? settings.escalation_notifications_enabled : true;
+
+                    if (shouldSend) {
+                        const { data: userData } = await supabase.auth.admin.getUserById(businessId);
+                        const email = userData?.user?.email;
+
+                        if (email) {
+                            const { sendEscalationEmail } = await import('@/lib/email');
+                            await sendEscalationEmail(email, conversationId, visitorId);
+
+                            // 3. Mark as notified
+                            await supabase
+                                .from('customer_conversations')
+                                .update({ escalation_notified_at: new Date().toISOString() })
+                                .eq('id', conversationId);
+                        }
+                    }
+                }
+            } catch (notifyError) {
+                console.error('Failed to process escalation notification:', notifyError);
+                // Swallow error to not block the chat
+            }
+        }
     }
 
     const { error: aiInsertError } = await supabase

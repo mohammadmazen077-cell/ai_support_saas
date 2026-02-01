@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import Link from 'next/link';
 import { CloseConversationButton } from './close-conversation-button';
+import { ListWatcher } from './list-watcher';
 
 type StatusFilter = 'all' | 'needs_attention';
 
@@ -116,15 +117,15 @@ export default async function CustomerChatsPage({
                                     <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Transcript Preview</h4>
                                     <div className="space-y-2 max-h-40 overflow-y-auto text-sm">
                                         {conv.messages?.slice(-3).map((msg: { role: string; content: string; sender?: string }, i: number) => {
-                                                const label = msg.role === 'visitor' ? 'Visitor' : msg.sender === 'human' ? 'Support Agent' : 'AI Support';
-                                                return (
-                                                    <div key={i} className={`flex ${msg.role === 'visitor' ? 'justify-start' : 'justify-end'}`}>
-                                                        <span className={`px-2 py-1 rounded ${msg.role === 'visitor' ? 'bg-gray-100 text-gray-800' : 'bg-indigo-50 text-indigo-800'}`}>
-                                                            {label}: {msg.content}
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
+                                            const label = msg.role === 'visitor' ? 'Visitor' : msg.sender === 'human' ? 'Support Agent' : 'AI Support';
+                                            return (
+                                                <div key={i} className={`flex ${msg.role === 'visitor' ? 'justify-start' : 'justify-end'}`}>
+                                                    <span className={`px-2 py-1 rounded ${msg.role === 'visitor' ? 'bg-gray-100 text-gray-800' : 'bg-indigo-50 text-indigo-800'}`}>
+                                                        {label}: {msg.content}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </Link>
@@ -141,6 +142,7 @@ export default async function CustomerChatsPage({
                     </p>
                 </div>
             )}
+            <ListWatcher />
         </div>
     );
 }

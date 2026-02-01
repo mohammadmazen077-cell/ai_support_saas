@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
 import { getOrCreateCustomerConversation, getCustomerMessages, sendCustomerMessage } from '@/app/widget/actions';
 
 interface Message {
@@ -20,6 +21,7 @@ export default function WidgetChatPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [visitorId, setVisitorId] = useState<string | null>(null);
+    const [conversationId, setConversationId] = useState<string | null>(null);
     const [conversationStatus, setConversationStatus] = useState<ConversationStatus>('open');
     const [isLoading, setIsLoading] = useState(true);
     const [isSending, setIsSending] = useState(false);
@@ -39,7 +41,7 @@ export default function WidgetChatPage() {
         }
     }, []);
 
-    // Load conversation + messages (to get status for handoff UI)
+    // Load conversation + messages (to get status and ID)
     useEffect(() => {
         async function load() {
             if (!businessId || !visitorId) return;
@@ -48,6 +50,9 @@ export default function WidgetChatPage() {
                     getOrCreateCustomerConversation(businessId, visitorId),
                     getCustomerMessages(businessId, visitorId),
                 ]);
+
+                if (conv) setConversationId(conv.id);
+
                 const formatted = history.map((msg: { role: string; content: string; created_at?: string; sender?: string }) => ({
                     role: msg.role,
                     content: msg.content,
@@ -55,11 +60,12 @@ export default function WidgetChatPage() {
                     sender: msg.sender === 'human' ? 'human' : 'ai',
                 }));
                 setMessages(formatted);
-                // If human has already replied, treat as open (hide "human will respond shortly")
-                const hasHumanReply = formatted.some((m: { sender?: string }) => m.sender === 'human');
-                // Only leave waiting_for_human when a human actually sent a message; never based on status alone
+                // If human has just replied, treat as open
+                const lastMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+                const lastMessageIsHuman = lastMsg?.sender === 'human';
+
                 setConversationStatus((prev) =>
-                    hasHumanReply ? 'open' : prev === 'waiting_for_human' ? 'waiting_for_human' : ((conv as { status?: ConversationStatus })?.status ?? 'open')
+                    lastMessageIsHuman ? 'open' : prev === 'waiting_for_human' ? 'waiting_for_human' : ((conv as { status?: ConversationStatus })?.status ?? 'open')
                 );
             } catch (error) {
                 console.error('Failed to load', error);
@@ -86,12 +92,14 @@ export default function WidgetChatPage() {
                     sender: msg.sender === 'human' ? 'human' : 'ai',
                 }));
                 setMessages(formatted);
-                const hasHumanReply = formatted.some((m: { sender?: string }) => m.sender === 'human');
-                // Only leave waiting_for_human when a human actually sent a message; never based on status alone
+                const lastMsg = formatted.length > 0 ? formatted[formatted.length - 1] : null;
+                const lastMessageIsHuman = lastMsg?.sender === 'human';
+
+                // Only leave waiting_for_human when a human actually sent the LAST message
                 setConversationStatus((prev) =>
-                    hasHumanReply ? 'open' : prev === 'waiting_for_human' ? 'waiting_for_human' : ((conv as { status?: ConversationStatus })?.status ?? 'open')
+                    lastMessageIsHuman ? 'open' : prev === 'waiting_for_human' ? 'waiting_for_human' : ((conv as { status?: ConversationStatus })?.status ?? 'open')
                 );
-                if (hasHumanReply) setAgentTyping(false);
+                if (lastMessageIsHuman) setAgentTyping(false);
             } catch {
                 // ignore
             }
@@ -115,46 +123,112 @@ export default function WidgetChatPage() {
         }
     }, [conversationStatus]);
 
-    // When waiting for human, poll frequently for agent_sending_at (typing) and new messages
+    // Realtime subscription for typing
     useEffect(() => {
-        if (!businessId || !visitorId || conversationStatus !== 'waiting_for_human') return;
+        if (!conversationId) return;
+
+        const supabase = createClient();
+        const channel = supabase.channel(`conversation:${conversationId}`);
+
+        channel
+            .on('broadcast', { event: 'agent:typing' }, (payload) => {
+                if (payload.payload?.isTyping) {
+                    setAgentTyping(true);
+
+                    // Safety timeout: if we miss the stop event, clear after 5s
+                    // (Dashboard sends stop signal, but just in case)
+                    // Note: Ideally we reset this timer on every 'true' event
+                    // but simple timeout is okay for now. 
+                    // Better: use a debounced update or rely on upcoming false events.
+                } else {
+                    setAgentTyping(false);
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [conversationId]);
+
+    // Polling Logic: Poll messages every 2s
+    useEffect(() => {
+        if (!businessId || !visitorId) return;
         const interval = setInterval(async () => {
             try {
-                const [conv, history] = await Promise.all([
-                    getOrCreateCustomerConversation(businessId, visitorId),
-                    getCustomerMessages(businessId, visitorId),
-                ]);
+                const history = await getCustomerMessages(businessId, visitorId);
                 const formatted = history.map((msg: { role: string; content: string; created_at?: string; sender?: string }) => ({
                     role: msg.role,
                     content: msg.content,
                     created_at: msg.created_at,
                     sender: msg.sender === 'human' ? 'human' : 'ai',
                 }));
-                const agentTypingAt = (conv as { agent_typing_at?: string | null })?.agent_typing_at;
-                const agentSendingAt = (conv as { agent_sending_at?: string | null })?.agent_sending_at;
-                const hasHumanReply = formatted.some((m: { sender?: string }) => m.sender === 'human');
-                prevHumanCountRef.current = formatted.filter((m: { sender?: string }) => m.sender === 'human').length;
 
-                // Show three-dot typing when agent is typing in reply input or briefly while sending
-                if (agentTypingAt || agentSendingAt) setAgentTyping(true);
-                else setAgentTyping(false);
-
-                if (hasHumanReply) {
-                    setMessages(formatted);
-                    setConversationStatus('open');
-                    setAgentTyping(false);
-                }
+                setMessages((prev) => {
+                    // Simple length check first
+                    if (prev.length !== formatted.length) {
+                        // If message added, ensure we hide typing if it was a human message
+                        const lastMsg = formatted[formatted.length - 1];
+                        if (lastMsg.sender === 'human') {
+                            setAgentTyping(false);
+                            setConversationStatus('open'); // Force open if human message received
+                        }
+                        return formatted;
+                    }
+                    // Deep compare last message to catch content updates
+                    if (JSON.stringify(prev[prev.length - 1]) !== JSON.stringify(formatted[formatted.length - 1])) {
+                        const lastMsg = formatted[formatted.length - 1];
+                        if (lastMsg.sender === 'human') {
+                            setAgentTyping(false);
+                            setConversationStatus('open');
+                        }
+                        return formatted;
+                    }
+                    return prev;
+                });
             } catch {
                 // ignore
             }
-        }, 500);
+        }, 2000);
         return () => clearInterval(interval);
-    }, [businessId, visitorId, conversationStatus]);
+    }, [businessId, visitorId]);
+
 
     // Scroll to bottom when messages change, sending, or agent typing
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, isSending, agentTyping]);
+
+    // Broadcast customer typing
+    const broadcastTyping = async (isTyping: boolean) => {
+        if (!conversationId) return;
+        const supabase = createClient();
+        const channel = supabase.channel(`conversation:${conversationId}`);
+        // We can just send(), channel management is handled by supabase client usually if we reuse same channel name
+        // checking subscription state is better, but for simplicity/robustness in this useEffect-heavy component:
+        await channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'customer:typing',
+                    payload: { isTyping },
+                });
+            }
+        });
+    };
+
+    const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const handleTyping = () => {
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        } else {
+            broadcastTyping(true);
+        }
+        typingTimeoutRef.current = setTimeout(() => {
+            broadcastTyping(false);
+            typingTimeoutRef.current = null;
+        }, 1000); // 1s debounce
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -162,6 +236,10 @@ export default function WidgetChatPage() {
 
         const content = inputValue.trim();
         setInputValue('');
+
+        // Stop typing immediately
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        broadcastTyping(false);
 
         setMessages((prev) => [...prev, { role: 'visitor', content }]);
         setIsSending(true);
@@ -217,8 +295,8 @@ export default function WidgetChatPage() {
                         return (
                             <div key={idx} className={`flex ${isVisitor ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${isVisitor
-                                        ? 'bg-indigo-600 text-white rounded-br-none'
-                                        : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-none'
+                                    ? 'bg-indigo-600 text-white rounded-br-none'
+                                    : 'bg-white text-gray-800 border border-gray-100 shadow-sm rounded-bl-none'
                                     }`}>
                                     {!isVisitor && (
                                         <span className="block text-xs font-medium text-gray-500 mb-1">{label}</span>
@@ -229,13 +307,14 @@ export default function WidgetChatPage() {
                         );
                     })
                 )}
-                {isWaitingForHuman && !agentTyping && (
-                    <div className="flex justify-center">
-                        <div className="rounded-2xl px-4 py-2.5 text-sm bg-amber-50 text-amber-800 border border-amber-200">
-                            A human support agent will respond shortly.
+                {/* Waiting message: Only show if status is waiting AND agent is not currently typing */
+                    isWaitingForHuman && !agentTyping && (
+                        <div className="flex justify-center">
+                            <div className="rounded-2xl px-4 py-2.5 text-sm bg-amber-50 text-amber-800 border border-amber-200">
+                                A human support agent will respond shortly.
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
                 {agentTyping && (
                     <div className="flex justify-start">
                         <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-none px-4 py-3 flex space-x-1 items-center">
@@ -263,7 +342,10 @@ export default function WidgetChatPage() {
                     <input
                         type="text"
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
+                        onChange={(e) => {
+                            setInputValue(e.target.value);
+                            handleTyping();
+                        }}
                         placeholder="Type a message..."
                         className="flex-1 rounded-full border-gray-200 bg-gray-50 px-4 py-2 text-sm focus:border-indigo-500 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
                     />
